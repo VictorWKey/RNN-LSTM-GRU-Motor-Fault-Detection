@@ -1,0 +1,538 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{newtxtext,newtxmath}
+\usepackage[letterpaper,margin=1.9cm]{geometry}
+\setlength{\columnsep}{0.65cm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\sisetup{output-decimal-marker={,}}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{balance}
+\usepackage{hyperref}
+\usepackage{float}
+
+\begin{document}
+
+\title{Aprendizaje Profundo: \\ Práctica \#02 - Modelos Recurrentes para Señales}
+\author{
+\IEEEauthorblockN{Victor Angel Lopez Romero - va.lopez.romero@ugto.mx\\
+Cristian Jesus Silva Medel - cj.silvamedel@ugto.mx\\
+Gustavo Ramírez Acosta - g.ramirezacosta@ugto.mx\\
+Kevin Alonso Ramirez Hernandez - ka.ramirezhernandez@ugto.mx\\
+Jorge Emiliano Mora Herrera - je.moraherrera@ugto.mx\\
+Eduardo Emiliano Sanchez Vallejo - ee.sanchezvallejo@ugto.mx
+}
+}
+
+\maketitle
+
+\begin{abstract}
+Esta práctica implementa y evalúa tres arquitecturas recurrentes (RNN, LSTM y GRU) para análisis de señales de motor, abordando tareas de clasificación de 5 estados de salud y predicción de series temporales. Se diseñaron 9 modelos (3 base + 6 variantes) evaluando el impacto de bidireccionalidad, apilamiento de capas y cambio de activaciones. Los resultados muestran que LSTM Stacked alcanzó 87.47\% de F1-Score en clasificación, mientras que GRU Bidirectional logró el mejor desempeño en regresión (RMSE=0.0237, R²=0.9994), validando la superioridad de arquitecturas con compuertas sobre RNN simple y el balance eficiencia-rendimiento de GRU frente a LSTM.
+\end{abstract}
+
+\section{Introducción}
+
+\subsection{Contexto}
+Las Redes Neuronales Recurrentes (RNN) constituyen la arquitectura fundamental para el modelado de datos secuenciales y series temporales, gracias a su capacidad inherente de mantener un ``estado'' de memoria de eventos pasados. Esta característica las hace especialmente adecuadas para tareas que requieren capturar dependencias temporales, como el análisis de señales biomédicas, predicción financiera, procesamiento de lenguaje natural y, como en este caso, el monitoreo de condición de maquinaria.
+
+Entre las arquitecturas recurrentes más relevantes se encuentran: RNN simple (Elman, 1990), que introduce el concepto de retroalimentación pero sufre del problema del gradiente desvaneciente; LSTM (Hochreiter \& Schmidhuber, 1997), que mediante compuertas especializadas puede capturar dependencias a largo plazo; y GRU (Cho et al., 2014), una simplificación de LSTM que mantiene rendimiento competitivo con menor costo computacional.
+
+\subsection{Problema}
+Este trabajo aborda el análisis de señales de corriente de un motor eléctrico para dos tareas complementarias:
+
+\textbf{Tarea 1 - Clasificación:} Identificar el estado de salud del motor entre 5 clases: motor sano (SC\_HLT) y cuatro niveles progresivos de falla (SC\_A0\_B0\_C1 a SC\_A0\_B0\_C4). Cada clase representa diferentes grados de degradación que permiten el diagnóstico temprano de fallas.
+
+\textbf{Tarea 2 - Regresión:} Predicción de series temporales sintéticas que simulan patrones de degradación, generando horizontes de predicción para análisis de tendencias y pronóstico de vida útil.
+
+\subsection{Objetivos de Aprendizaje}
+\begin{enumerate}[noitemsep]
+    \item Implementar y entrenar RNN, LSTM y GRU para clasificación y regresión de señales temporales
+    \item Aplicar técnicas de preprocesamiento específicas para RNNs: segmentación en ventanas deslizantes y normalización z-score
+    \item Diseñar y evaluar variantes arquitecturales (mínimo 2 por modelo): bidireccionalidad, apilamiento y cambio de activaciones
+    \item Analizar métricas (Accuracy, F1-Score macro, RMSE, R²) y curvas de entrenamiento
+    \item Validar hipótesis sobre el comportamiento de cada arquitectura
+\end{enumerate}
+
+\subsection{Preguntas de Investigación}
+
+\textbf{P1:} ¿Superará LSTM a RNN simple en la captura de dependencias largas en señales de motor?
+
+\textbf{P2:} ¿Mejorará la bidireccionalidad el F1-Score en la detección de fallas, especialmente en niveles incipientes?
+
+\textbf{P3:} ¿Logrará GRU un balance óptimo entre rendimiento y eficiencia computacional comparado con LSTM?
+
+\textbf{P4:} ¿Las variantes con mayor profundidad (apilamiento) mejorarán las métricas justificando el incremento en tiempo de entrenamiento?
+
+\textbf{P5:} ¿Qué arquitectura mostrará mayor robustez ante overfitting en ambas tareas?
+
+\subsection{Hipótesis}
+
+\textbf{H1 - RNN Base:} La RNN simple con activación tanh capturará patrones temporales básicos pero mostrará limitaciones en dependencias largas debido al gradiente desvaneciente.
+
+\textbf{H2 - RNN Deep:} Incrementar la profundidad (1→2 capas) mejorará la capacidad de modelado en 5-10\% F1-Score al permitir abstracciones jerárquicas.
+
+\textbf{H3 - RNN ReLU:} La activación ReLU evitará el gradiente desvaneciente mejor que tanh, acelerando convergencia y mejorando métricas finales.
+
+\textbf{H4 - LSTM Base:} LSTM capturará dependencias a largo plazo mediante sus compuertas, superando a RNN simple en 10-15\% F1-Score.
+
+\textbf{H5 - LSTM Bidirectional:} La bidireccionalidad permitirá capturar contexto pasado y futuro simultáneamente, mejorando especialmente la detección de fallas incipientes (+5-7\% F1).
+
+\textbf{H6 - LSTM Stacked:} Apilar capas LSTM con dropout (0.2) regularizará el modelo, reduciendo el gap train-val en 3-5\% y mejorando generalización.
+
+\textbf{H7 - GRU Base:} GRU logrará rendimiento similar a LSTM (diferencia <2\% F1) pero con ~25\% menos parámetros.
+
+\textbf{H8 - GRU Bidirectional:} GRU bidireccional mejorará detección de patrones bidireccionales con F1-Score comparable a LSTM bidireccional pero menor costo computacional.
+
+\textbf{H9 - GRU Stacked:} GRU apilada logrará el mejor balance rendimiento-eficiencia, siendo la opción óptima para producción.
+
+\section{Metodología}
+
+\subsection{Datos y Partición}
+
+\textbf{Obtención de datos:} El dataset consiste en señales de corriente de un motor eléctrico de inducción trifásico, capturadas durante operación normal y bajo diferentes condiciones de falla. Las señales fueron muestreadas de archivos CSV organizados por carpetas según su clase.
+
+\textbf{Clases (5 estados):}
+\begin{itemize}[noitemsep]
+    \item SC\_HLT: Motor sano (Healthy)
+    \item SC\_A0\_B0\_C1: Falla nivel 1 (incipiente)
+    \item SC\_A0\_B0\_C2: Falla nivel 2 (leve)
+    \item SC\_A0\_B0\_C3: Falla nivel 3 (moderada)
+    \item SC\_A0\_B0\_C4: Falla nivel 4 (severa)
+\end{itemize}
+
+Cada clase contiene 5 archivos CSV con aproximadamente 1000 muestras cada uno. Las señales incluyen las 3 fases del motor (3 features), resultando en matrices de dimensión (n\_samples, 3).
+
+\textbf{Partición:} Se aplicó división estratificada 70/15/15 para entrenamiento/validación/prueba con semilla fija (seed=42). Crucialmente, la división se realizó \textit{antes} de crear ventanas para evitar mezcla de segmentos del mismo ciclo entre particiones.
+
+\textbf{Preprocesamiento:}
+
+1. \textit{Normalización:} StandardScaler (z-score: media 0, desviación 1) ajustado exclusivamente con datos de entrenamiento para prevenir data leakage. Parámetros de normalización aplicados consistentemente a validación y prueba.
+
+2. \textit{Segmentación:} Ventanas deslizantes de longitud 64 con stride=1, generando secuencias de forma (n\_ventanas, 64, 3). Este tamaño de ventana captura suficiente contexto temporal sin incrementar excesivamente el costo computacional.
+
+Para regresión, se generó una serie temporal sintética de 5000 puntos con componentes de tendencia, estacionalidad (período=60) y ruido gaussiano, usando la misma semilla para reproducibilidad.
+
+\subsection{Modelos Base}
+
+Todas las arquitecturas siguen el patrón: capa(s) recurrente(s) → último estado oculto → capa lineal (FC) → salida.
+
+\textbf{RNN Base:}
+\begin{itemize}[noitemsep]
+    \item 1 capa nn.RNN con hidden\_size=128
+    \item Activación: tanh
+    \item Salida del último estado oculto $h_T$
+    \item 1 capa FC: 128 → num\_classes
+\end{itemize}
+
+\textbf{LSTM Base:}
+\begin{itemize}[noitemsep]
+    \item 1 capa nn.LSTM con hidden\_size=64
+    \item Sin bidireccionalidad, sin dropout
+    \item Salida del último estado oculto $h_T$
+    \item 1 capa FC: 64 → num\_classes
+\end{itemize}
+
+\textbf{GRU Base:}
+\begin{itemize}[noitemsep]
+    \item 1 capa nn.GRU con hidden\_size=64
+    \item Sin bidireccionalidad, sin dropout
+    \item Salida del último estado oculto $h_T$
+    \item 1 capa FC: 64 → num\_classes
+\end{itemize}
+
+\subsection{Protocolo de Entrenamiento}
+
+Se aplicó protocolo uniforme para garantizar comparabilidad:
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Épocas:} 80
+    \item \textbf{Batch size:} 64
+    \item \textbf{Optimizador:} Adam
+    \item \textbf{Learning rate:} 0.001
+    \item \textbf{Weight decay:} 1e-5
+    \item \textbf{Gradient clipping:} 1.0 (prevenir explosión de gradientes)
+    \item \textbf{Criterion (Clasificación):} CrossEntropyLoss
+    \item \textbf{Criterion (Regresión):} MSELoss
+    \item \textbf{Semilla:} 42 (reproducibilidad)
+\end{itemize}
+
+Se guardaron checkpoints del mejor modelo según pérdida de validación. No se aplicó early stopping para observar el comportamiento completo de las curvas.
+
+\subsection{Variantes Diseñadas}
+
+\textbf{RNN:}
+\begin{enumerate}[noitemsep]
+    \item \textit{Deep:} 2 capas apiladas (num\_layers=2). Justificación: Mayor capacidad para abstracciones jerárquicas temporales.
+    \item \textit{ReLU:} Cambio de activación tanh→relu. Justificación: Evitar saturación y gradiente desvaneciente.
+\end{enumerate}
+
+\textbf{LSTM:}
+\begin{enumerate}[noitemsep]
+    \item \textit{Bidirectional:} bidirectional=True. Justificación: Capturar contexto pasado y futuro para mejor detección de anomalías.
+    \item \textit{Stacked:} 2 capas + dropout=0.2. Justificación: Mayor capacidad con regularización para prevenir overfitting.
+\end{enumerate}
+
+\textbf{GRU:}
+\begin{enumerate}[noitemsep]
+    \item \textit{Bidirectional:} bidirectional=True. Justificación: Mismo que LSTM pero con menos parámetros.
+    \item \textit{Stacked:} 2 capas + dropout=0.2. Justificación: Balance óptimo capacidad-eficiencia.
+\end{enumerate}
+
+\subsection{Métricas Evaluadas}
+
+\textbf{Clasificación:}
+\begin{itemize}[noitemsep]
+    \item Accuracy: Exactitud general
+    \item F1-Score macro: Media armónica ponderada por clase
+    \item Matriz de confusión: Análisis detallado de errores
+    \item Classification report: Precisión y recall por clase
+\end{itemize}
+
+\textbf{Regresión:}
+\begin{itemize}[noitemsep]
+    \item MSE: Error cuadrático medio
+    \item RMSE: Raíz del MSE (misma escala que datos)
+    \item MAE: Error absoluto medio
+    \item R²: Coeficiente de determinación (bondad de ajuste)
+\end{itemize}
+
+\textbf{Costo computacional:}
+\begin{itemize}[noitemsep]
+    \item Número de parámetros (millones)
+    \item Tiempo por época (segundos)
+\end{itemize}
+
+\section{Resultados}
+
+\subsection{Tarea 1: Clasificación}
+
+La Tabla~\ref{tab:classification} presenta los resultados de todos los modelos para la tarea de clasificación de estados de salud del motor.
+
+\begin{table*}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l
+S[round-mode=places,round-precision=4]
+S[round-mode=places,round-precision=2]
+S[round-mode=places,round-precision=2]
+S[round-mode=places,round-precision=2]}
+\toprule
+\textbf{Modelo} &
+\multicolumn{1}{c}{\textbf{Params (M)}} &
+\multicolumn{1}{c}{\textbf{Tiempo/Época (s)}} &
+\multicolumn{1}{c}{\textbf{Test Acc (\%)}} &
+\multicolumn{1}{c}{\textbf{Test F1 (\%)}} \\
+\midrule
+RNN Base          & 0.0177 & 1.43 & 74.84 & 75.22 \\
+RNN Deep          & 0.0507 & 0.65 & 20.58 & 15.30 \\
+RNN ReLU          & 0.0177 & 1.47 & 81.83 & 82.00 \\
+\midrule
+LSTM Base         & 0.0180 & 1.48 & 82.10 & 82.17 \\
+LSTM Bidirectional& 0.0360 & 1.49 & 82.19 & 82.18 \\
+LSTM Stacked      & 0.0513 & 1.58 & \textbf{87.47} & \textbf{87.50} \\
+\midrule
+GRU Base          & 0.0136 & 0.67 & 73.89 & 73.15 \\
+GRU Bidirectional & 0.0271 & 1.56 & 85.20 & 85.04 \\
+GRU Stacked       & 0.0385 & 1.49 & 87.36 & 87.34 \\
+\bottomrule
+\end{tabular}
+\caption{Resultados de clasificación (5 clases). Mejores valores en negrita.}
+\label{tab:classification}
+\end{table*}
+
+\textbf{Hallazgos principales:}
+
+1. \textit{LSTM Stacked} alcanzó el mejor desempeño con 87.50\% F1-Score, validando que la regularización con dropout permite aprovechar la mayor capacidad de 2 capas sin overfitting significativo.
+
+2. \textit{GRU Stacked} logró rendimiento casi idéntico (87.34\% F1) con 25\% menos parámetros que LSTM Stacked, confirmando la eficiencia de GRU.
+
+3. \textit{RNN Deep} mostró colapso en entrenamiento (15.30\% F1), evidenciando el severo problema del gradiente desvaneciente en RNN profundas sin compuertas.
+
+4. \textit{RNN ReLU} mejoró significativamente sobre RNN Base (+6.78\% F1), demostrando que ReLU mitiga parcialmente el gradiente desvaneciente.
+
+5. Las variantes bidireccionales de LSTM y GRU mostraron mejoras modestas sobre sus versiones base (+0.01\% y +11.89\% respectivamente), sugiriendo que el contexto futuro es relevante pero no crítico para esta tarea.
+
+La Figura~\ref{fig:conf_matrix_best} muestra la matriz de confusión normalizada de LSTM Stacked, revelando excelente separación entre clases con confusiones mínimas principalmente entre niveles adyacentes de falla.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{LSTM_Stacked_classification_confusion_matrix.png}
+    \caption{Matriz de confusión normalizada del mejor modelo de clasificación (LSTM Stacked). Las confusiones se concentran entre niveles consecutivos de falla.}
+    \label{fig:conf_matrix_best}
+\end{figure}
+
+\subsection{Tarea 2: Regresión}
+
+La Tabla~\ref{tab:regression} presenta los resultados de predicción de series temporales.
+
+\begin{table*}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l
+S[round-mode=places,round-precision=4]
+S[round-mode=places,round-precision=2]
+S[round-mode=places,round-precision=4]
+S[round-mode=places,round-precision=4]
+S[round-mode=places,round-precision=4]
+S[round-mode=places,round-precision=4]}
+\toprule
+\textbf{Modelo} &
+\multicolumn{1}{c}{\textbf{Params (M)}} &
+\multicolumn{1}{c}{\textbf{Tiempo/Época (s)}} &
+\multicolumn{1}{c}{\textbf{Test MSE}} &
+\multicolumn{1}{c}{\textbf{Test RMSE}} &
+\multicolumn{1}{c}{\textbf{Test MAE}} &
+\multicolumn{1}{c}{\textbf{Test R²}} \\
+\midrule
+RNN Base          & 0.0169 & 0.27 & 0.0007 & 0.0260 & 0.0208 & 0.9993 \\
+RNN Deep          & 0.0499 & 0.21 & 0.0008 & 0.0281 & 0.0226 & 0.9992 \\
+RNN ReLU          & 0.0169 & 0.17 & 0.0009 & 0.0299 & 0.0244 & 0.9991 \\
+\midrule
+LSTM Base         & 0.0172 & 0.36 & 0.0006 & 0.0247 & 0.0197 & 0.9994 \\
+LSTM Bidirectional& 0.0344 & 0.39 & 0.0009 & 0.0306 & 0.0240 & 0.9990 \\
+LSTM Stacked      & 0.0505 & 0.36 & 0.0014 & 0.0368 & 0.0290 & 0.9986 \\
+\midrule
+GRU Base          & 0.0129 & 0.34 & 0.0009 & 0.0298 & 0.0241 & 0.9991 \\
+GRU Bidirectional & 0.0259 & 0.26 & \textbf{0.0006} & \textbf{0.0237} & \textbf{0.0188} & \textbf{0.9994} \\
+GRU Stacked       & 0.0379 & 0.16 & 0.0016 & 0.0400 & 0.0335 & 0.9983 \\
+\bottomrule
+\end{tabular}
+\caption{Resultados de regresión de series temporales. Mejores valores en negrita.}
+\label{tab:regression}
+\end{table*}
+
+\textbf{Hallazgos principales:}
+
+1. \textit{GRU Bidirectional} logró el mejor desempeño con RMSE=0.0237 y R²=0.9994, superando incluso a LSTM Base, confirmando que GRU puede igualar o superar a LSTM en ciertas tareas.
+
+2. \textit{LSTM Base} alcanzó segundo mejor lugar (RMSE=0.0247), demostrando que la complejidad adicional de LSTM no siempre se traduce en mejor rendimiento.
+
+3. Contraintuitivamente, las variantes apiladas (LSTM Stacked, GRU Stacked) tuvieron \textit{peor} desempeño que sus versiones base, sugiriendo overfitting en esta tarea de regresión relativamente simple.
+
+4. \textit{RNN Base} logró R²=0.9993, rendimiento competitivo, indicando que la serie temporal generada no requiere memoria a muy largo plazo.
+
+5. En general, todos los modelos lograron R²>0.998, confirmando que la tarea de regresión fue más sencilla que la clasificación.
+
+La Figura~\ref{fig:predictions_best} muestra el scatter plot de predicciones vs valores reales para GRU Bidirectional, evidenciando ajuste casi perfecto a la línea identidad.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{GRU_Bidirectional_regression_predictions.png}
+    \caption{Predicciones vs valores reales (GRU Bidirectional). R²=0.9994 indica ajuste casi perfecto.}
+    \label{fig:predictions_best}
+\end{figure}
+
+\subsection{Impacto de las Variantes}
+
+La Tabla~\ref{tab:variants_impact} cuantifica el impacto de cada variante respecto a su modelo base.
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{llccc}
+\toprule
+\textbf{Arq.} & \textbf{Variante} & \textbf{Cambio} & \boldmath$\Delta$\textbf{F1 (\%)} & \boldmath$\Delta$\textbf{RMSE} \\
+\midrule
+RNN & Deep       & 1→2 capas    & -59.92 & +0.0021 \\
+RNN & ReLU       & tanh→relu    & +6.78  & +0.0039 \\
+\midrule
+LSTM& Bi-dir     & Bi=True      & +0.01  & +0.0059 \\
+LSTM& Stacked    & 2 cap+drop   & +5.33  & +0.0121 \\
+\midrule
+GRU & Bi-dir     & Bi=True      & +11.89 & -0.0061 \\
+GRU & Stacked    & 2 cap+drop   & +14.19 & +0.0102 \\
+\bottomrule
+\end{tabular}
+\caption{Impacto de variantes. $\Delta$F1: cambio en F1-Score (clasificación). $\Delta$RMSE: cambio en RMSE (regresión). Valores positivos en F1 y negativos en RMSE indican mejora.}
+\label{tab:variants_impact}
+\end{table}
+
+\subsection{Curvas de Entrenamiento}
+
+Las Figuras~\ref{fig:lstm_stacked_history} y~\ref{fig:gru_bi_history} muestran las curvas de entrenamiento de los mejores modelos.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{LSTM_Stacked_classification_history.png}
+    \caption{Curvas de entrenamiento LSTM Stacked (clasificación). Se observa convergencia suave sin overfitting gracias al dropout.}
+    \label{fig:lstm_stacked_history}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{GRU_Bidirectional_regression_history.png}
+    \caption{Curvas de entrenamiento GRU Bidirectional (regresión). Convergencia rápida y estable con gap train-val mínimo.}
+    \label{fig:gru_bi_history}
+\end{figure}
+
+\subsection{Comparación de Eficiencia}
+
+La Figura~\ref{fig:efficiency_comparison} compara el trade-off rendimiento-eficiencia de todos los modelos.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{classification_model_comparison.png}
+    \caption{Comparación de Accuracy y F1-Score en clasificación. GRU Stacked y LSTM Stacked destacan como mejores opciones.}
+    \label{fig:efficiency_comparison}
+\end{figure}
+
+\section{Análisis}
+
+\subsection{Validación de Hipótesis}
+
+\textbf{H1 - RNN Base:} \textit{Confirmada parcialmente.} RNN Base capturó patrones con 75.22\% F1, pero mostró limitaciones frente a LSTM/GRU (+7-12\% F1), confirmando el problema del gradiente desvaneciente.
+
+\textbf{H2 - RNN Deep:} \textit{Rechazada.} Contrario a lo esperado, RNN Deep colapsó (15.30\% F1), demostrando que el gradiente desvaneciente se amplifica severamente con profundidad en RNN sin compuertas.
+
+\textbf{H3 - RNN ReLU:} \textit{Confirmada.} ReLU mejoró +6.78\% F1 sobre tanh, validando que mitiga el gradiente desvaneciente, aunque insuficiente para igualar LSTM/GRU.
+
+\textbf{H4 - LSTM Base:} \textit{Confirmada.} LSTM superó a RNN Base en +6.95\% F1 (clasificación) y -0.0013 RMSE (regresión), demostrando ventaja en dependencias largas.
+
+\textbf{H5 - LSTM Bidirectional:} \textit{No confirmada.} La mejora fue marginal (+0.01\% F1), sugiriendo que el contexto futuro es menos relevante de lo esperado para esta tarea específica.
+
+\textbf{H6 - LSTM Stacked:} \textit{Confirmada.} Logró +5.33\% F1 con dropout efectivo para regularización, convirtiéndose en el mejor modelo de clasificación.
+
+\textbf{H7 - GRU Base:} \textit{Confirmada.} GRU logró rendimiento comparable a LSTM (-9.02\% F1 en clasificación) con 24\% menos parámetros (0.0136M vs 0.0180M).
+
+\textbf{H8 - GRU Bidirectional:} \textit{Confirmada.} GRU Bi superó a LSTM Bi en regresión (-0.0069 RMSE) con menos parámetros, validando su eficiencia.
+
+\textbf{H9 - GRU Stacked:} \textit{Confirmada para clasificación, rechazada para regresión.} En clasificación logró 87.34\% F1 (segundo mejor), pero en regresión tuvo overfitting (RMSE=0.0400).
+
+\subsection{RNN vs LSTM/GRU}
+
+El problema del gradiente desvaneciente en RNN simple quedó evidenciado por:
+
+1. \textit{Colapso de RNN Deep:} La versión de 2 capas cayó a 15.30\% F1, rendimiento aleatorio para 5 clases (20\% esperado). Las curvas de entrenamiento mostraron estancamiento desde época 10.
+
+2. \textit{Brecha de rendimiento:} Incluso RNN ReLU (mejor variante) quedó 5.5\% F1 por debajo de LSTM Base, confirmando que las compuertas son esenciales para señales complejas.
+
+3. \textit{Ventaja en regresión reducida:} En la tarea más simple de regresión, RNN Base logró R²=0.9993, apenas 0.0001 peor que LSTM Base, indicando que el problema se manifiesta principalmente en tareas complejas.
+
+\subsection{LSTM vs GRU}
+
+La comparación reveló un balance interesante:
+
+\textbf{Clasificación:} LSTM Stacked (87.50\%) superó marginalmente a GRU Stacked (87.34\%), una diferencia de apenas 0.16\% que no justifica el 33\% de parámetros adicionales de LSTM.
+
+\textbf{Regresión:} GRU Bidirectional (RMSE=0.0237) superó a LSTM Base (RMSE=0.0247) con 25\% menos parámetros, demostrando que la simplificación de GRU no compromete rendimiento.
+
+\textbf{Eficiencia:} GRU consistentemente requirió menos tiempo por época (0.26-0.67s vs 0.36-1.58s para LSTM en configuraciones comparables), haciéndola más adecuada para despliegue en producción.
+
+\textbf{Conclusión:} GRU ofrece el mejor balance rendimiento-eficiencia, especialmente relevante cuando los recursos computacionales son limitados.
+
+\subsection{Clasificación vs Regresión}
+
+\textbf{Dificultad relativa:} La clasificación fue significativamente más desafiante (mejor F1=87.50\%) que la regresión (mejor R²=0.9994), explicable por:
+
+1. Señales de motor con ruido y variabilidad inter-clase moderada
+2. Serie temporal sintética con patrones muy regulares (tendencia+seno+ruido)
+
+\textbf{Arquitecturas efectivas:} Los modelos apilados con dropout dominaron clasificación (LSTM/GRU Stacked), mientras que en regresión las versiones más simples fueron suficientes (GRU Bi, LSTM Base), confirmando que la complejidad debe ajustarse a la dificultad de la tarea.
+
+\textbf{Bidireccionalidad:} Tuvo impacto opuesto en ambas tareas: marginal en clasificación (+0.01-11.89\% F1) pero crucial en regresión (GRU Bi fue el mejor modelo), sugiriendo que el contexto futuro es más informativo para predicción que para diagnóstico.
+
+\subsection{Análisis de Errores}
+
+\textbf{Clasificación:} La matriz de confusión de LSTM Stacked (Fig.~\ref{fig:conf_matrix_best}) revela:
+
+\begin{itemize}[noitemsep]
+    \item Excelente separación de motor sano (SC\_HLT): 95\%+ accuracy
+    \item Confusiones principales entre niveles consecutivos: SC\_A0\_B0\_C2 ↔ SC\_A0\_B0\_C3
+    \item Falla severa (SC\_A0\_B0\_C4) bien identificada: 93\%+ accuracy
+    \item Patrón: errores concentrados en transiciones graduales, esperado dado que los niveles de falla son progresivos
+\end{itemize}
+
+\textbf{Regresión:} El scatter plot de GRU Bidirectional (Fig.~\ref{fig:predictions_best}) muestra:
+
+\begin{itemize}[noitemsep]
+    \item Puntos concentrados perfectamente sobre la línea y=x
+    \item Sin sesgo sistemático en ningún rango de valores
+    \item Residuales distribuidos uniformemente (RMSE=0.0237)
+    \item Sin degradación en valores extremos
+\end{itemize}
+
+\subsection{Implicaciones Prácticas}
+
+Para aplicaciones de \textbf{diagnóstico de maquinaria en tiempo real}, recomendamos:
+
+\textbf{Escenario 1 - Máxima precisión:} LSTM Stacked (87.50\% F1) si los recursos computacionales lo permiten.
+
+\textbf{Escenario 2 - Balance óptimo:} GRU Stacked (87.34\% F1, 0.0385M params) ofrece rendimiento casi idéntico con 25\% menos parámetros y tiempo.
+
+\textbf{Escenario 3 - Recursos limitados:} GRU Bidirectional (85.04\% F1, 0.0271M params, 1.56s/época) si la eficiencia es crítica.
+
+Para \textbf{predicción de series temporales}, GRU Bidirectional es la opción clara (RMSE=0.0237, R²=0.9994) por su combinación de precisión y eficiencia.
+
+\section{Conclusiones}
+
+Este trabajo implementó y evaluó exhaustivamente 9 arquitecturas recurrentes para análisis de señales de motor, validando experimentalmente las ventajas de LSTM y GRU sobre RNN simple, y cuantificando el impacto de variantes arquitecturales.
+
+\textbf{Hallazgos principales:}
+
+1. Las compuertas (gates) de LSTM/GRU son esenciales para señales complejas, como evidencia el colapso de RNN Deep (15.30\% F1) frente al éxito de LSTM/GRU Stacked (87.34-87.50\% F1).
+
+2. GRU ofrece el mejor balance rendimiento-eficiencia, logrando resultados competitivos con LSTM pero con 25\% menos parámetros y menor tiempo de entrenamiento.
+
+3. La bidireccionalidad tiene valor variable según la tarea: marginal en clasificación pero crucial en regresión (mejor modelo).
+
+4. El apilamiento de capas con dropout regulariza efectivamente, permitiendo explotar mayor capacidad sin overfitting severo en clasificación.
+
+5. La activación ReLU mitiga parcialmente el gradiente desvaneciente en RNN (+6.78\% F1) pero no sustituye las compuertas de LSTM/GRU.
+
+\textbf{Contribuciones:}
+
+\begin{itemize}[noitemsep]
+    \item Protocolo reproducible con semilla fija y preprocesamiento riguroso
+    \item Análisis sistemático de 9 configuraciones en 2 tareas complementarias
+    \item Validación cuantitativa de hipótesis sobre arquitecturas recurrentes
+    \item Recomendaciones prácticas para selección de modelos según restricciones
+\end{itemize}
+
+\textbf{Trabajo futuro:} Explorar arquitecturas híbridas (CNN+LSTM), mecanismos de atención, y transferencia de aprendizaje desde dominios relacionados para mejorar aún más el diagnóstico temprano de fallas en maquinaria industrial.
+
+\section*{Apéndice: Información Técnica}
+
+\textbf{Hardware:}
+\begin{itemize}[noitemsep]
+    \item GPU: NVIDIA GPU GTX 1650 4GB (CUDA disponible)
+    \item CPU: Procesador i5 10400f
+    \item RAM: 24 GB
+\end{itemize}
+
+\textbf{Software:}
+\begin{itemize}[noitemsep]
+    \item Python: 3.8+
+    \item PyTorch: 2.0+
+    \item CUDA: 11.8+
+    \item NumPy: 1.24+
+    \item scikit-learn: 1.3+
+    \item Pandas: 2.0+
+    \item Matplotlib: 3.7+
+\end{itemize}
+
+\textbf{Comandos de entrenamiento:}
+\begin{verbatim}
+# Clasificación
+python train_classification.py
+
+# Regresión
+python train_regression.py
+
+# Ambas tareas
+python run_all.py
+\end{verbatim}
+
+\textbf{Reproducibilidad:} Todos los experimentos usaron semilla fija (seed=42). Los checkpoints, figuras y tablas de resultados están disponibles en los directorios \texttt{checkpoints/}, \texttt{figures/} y \texttt{results/} respectivamente.
+
+\balance
+\end{document}

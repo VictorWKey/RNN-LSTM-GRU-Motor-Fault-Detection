@@ -1,0 +1,199 @@
+\documentclass[twocolumn]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{array}
+\usepackage{booktabs}
+
+\geometry{a4paper, margin=2cm}
+
+\title{\vspace{-1cm}\textbf{Aprendizaje Profundo:\\Práctica \#2 -- Modelos Recurrentes para Señales}}
+\author{M.I. Juan José Cárdenas Cornejo\\
+\texttt{jj.cardenascornejo@ugto.mx}}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\textbf{\textit{Resumen---}}Esta práctica guía al estudiante en el diseño, entrenamiento y evaluación de tres arquitecturas recurrentes (RNN, LSTM y GRU) para un problema de análisis de señales de motor. Se abordan tareas de clasificación (13 clases de falla) y de regresión, bajo el enfoque IMRA (Introducción--Metodología--Resultados--Análisis).
+
+\textbf{\textit{Index Terms---}}Aprendizaje profundo, RNN, LSTM, GRU, series de tiempo, clasificación, regresión.
+\end{abstract}
+
+\section{Introducción}
+
+\textbf{Contexto:} Las Redes Neuronales Recurrentes (RNN) son la arquitectura por excelencia para modelar datos secuenciales y series de tiempo, gracias a su capacidad de mantener un ``estado'' memoria de eventos pasados. En esta práctica, se comparan las RNN simples (Elman), LSTM (Long Short-Term Memory) y GRU (Gated Recurrent Unit).
+
+\textbf{Problema.} Analizar señales de corriente de un motor para:
+\begin{enumerate}
+    \item \textbf{Clasificación:} Identificar el estado de salud del motor entre 13 clases (1 sano + 4 niveles de falla $\times$ 3 fases).
+    \item \textbf{Regresión:} Generar al menos otras 500 muestras por clase.
+\end{enumerate}
+
+\textbf{Objetivos de aprendizaje.}
+\begin{itemize}[noitemsep]
+    \item Implementar y entrenar RNN, LSTM y GRU para la clasificación y la regresión de señales.
+    \item Aplicar técnicas de preprocesamiento de señales para RNNs (segmentación en ventanas, normalización).
+    \item Diseñar y evaluar variantes (cómo mínimo dos por modelo), p.ej., bidireccionalidad, apilamiento (stacking), dropout.
+    \item Analizar métricas (Accuracy, F1-Score, RMSE, R²) y las curvas de entrenamiento para ambas tareas.
+\end{itemize}
+
+\textbf{Preguntas e hipótesis:} Formular preguntas (p.ej., ¿Se-rá LSTM a la RNN simple en dependencias largas? ¿Mejora la bidireccionalidad el F1-Score en fallas incipientes?) y una hipótesis por cada variante.
+
+\section{Metodología}
+
+\subsection{\textit{II-A. Datos y partición}}
+
+\textbf{Obtención de datos.} Descargar brevemente las señales de motor. Indicar las 13 clases (Sano, Falla F1-A, Falla F2-A, ..., Falla F4-C). Describir el \textit{target} de regresión.
+
+\textbf{Partición:} entrenamiento/validación/prueba (p.ej., 70/15/15) con semilla fija. ¡Asegurarse de no mezclar segmentos del mismo ciclo de motor entre particiones!
+
+\textbf{Preprocesamiento (clave para RNNs):}
+\begin{enumerate}
+    \item \textbf{Normalización:} Recomendar StandardScaler (media 0, desviación estándar 1) o MinMaxScaler (rango [0, 1]), ajustado \textit{solo} con los datos de \textit{train}.
+    \item \textbf{Segmentación:} Crear ventanas deslizantes (secuencias) de longitud fija (p.ej., 1024). La entrada a la red será (Batch, 1024, N\_features).
+\end{enumerate}
+
+\subsection{\textit{II-B. Modelos (base)}}
+
+Para todas las redes, la salida de la capa recurrente (el último estado oculto $h_T$ o la secuencia completa) se conecta a una capa Lineal (Dense):
+
+\textbf{RNN (base).} 1-2 capas de ``nn.RNN'' (con tanh o relu); 1 capa FC. Variantes: Incrementar profundidad, cambiar activación.
+
+\textbf{LSTM (base).} 1-2 capas ``nn.LSTM''; 1 capa FC. Variantes: `bidirectional=True', añadir Dropout recurrente, apilar más capas.
+
+\textbf{GRU (base).} 1-2 capas ``nn.GRU''; 1 capa FC. Variantes: `bidirectional=True', apilar más capas.
+
+\subsection{\textit{II-C. Protocolo de entrenamiento (común)}}
+
+\textbf{Épocas:} 80, \textbf{Batch size:} 64, \textbf{Optimizador:} Adam (weight\_decay=1e-5). \textbf{LR inicial:} 0.001.
+
+\textbf{Criterion (Clasificación):} Cross-Entropy Loss.
+
+\textbf{Criterion (Regresión):} MSE Loss (o MAE Loss).
+
+\textbf{Semillas:} fijadas para reproducibilidad.
+
+\subsection{\textit{II-D. Variantes (objetivo obligatorio)}}
+
+Proponer al menos dos variantes por modelo (RNN, LSTM, GRU). Justificar la expectativa. Ejemplos:
+
+\begin{itemize}[noitemsep]
+    \item \textit{Arquitectura:} LSTM apilada (2 capas); GRU Bidireccional, cambio en el número de elementos ocultos por capa para las celdas (modelo lstm, gru).
+    \item \textit{Regularización:} Añadir Dropout a la(s) capa(s) FC; añadir Dropout recurrente en LSTM/GRU.
+    \item \textit{Entrenamiento:} Probar optimizador SGD con momento vs Adam, ReduceLROnPlateau.
+\end{itemize}
+
+\subsection{\textit{II-E. Métricas e histórico}}
+
+\textbf{Clasificación:} Accuracy, F1 macro, matriz de confusión (Test), ROC-AUC o similares. Pérdida y Mean Abs. Error (Mean Abs. Error), MAE (Mean Abs. Error), R² (Coef. de Determinación).
+
+\textbf{Curvas:} Pérdida principal (train/val) para ambas tareas. Costo: tiempo por época y \# de parámetros. Guardar checkpoint del mejor modelo en validación (F1 o RMSE).
+
+\section{Resultados}
+
+\subsection{\textit{III-A. Tarea 1: Clasificación (13 Clases)}}
+
+\textbf{Tabla I:} Base (Clasificación): desempeño y costo.
+
+\begin{table*}[t]
+\centering
+\small
+\begingroup\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccccc}
+	oprule
+	extbf{Modelo} & \textbf{Params (M)} & \textbf{Épocas (k)} & \textbf{Val Acc} & \textbf{Val F1} & \textbf{Test Acc} & \textbf{Test F1} \\
+\midrule
+RNN & -- & -- & -- & -- & -- & -- \\
+LSTM & -- & -- & -- & -- & -- & -- \\
+GRU & -- & -- & -- & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\endgroup
+\end{table*}
+
+\subsection{\textit{III-B. Tarea 2: Regresión (p.ej., RUL)}}
+
+\textbf{Tabla II:} Base (Regresión): desempeño y costo.
+
+\begin{table*}[t]
+\centering
+\small
+\begingroup\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccccc}
+	oprule
+	extbf{Modelo} & \textbf{Params (M)} & \textbf{Épocas (k)} & \textbf{Val RMSE} & \textbf{Val R²} & \textbf{Test RMSE} & \textbf{Test R²} \\
+\midrule
+RNN & -- & -- & -- & -- & -- & -- \\
+LSTM & -- & -- & -- & -- & -- & -- \\
+GRU & -- & -- & -- & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\endgroup
+\end{table*}
+
+\subsection{\textit{III-C. Impacto de las variantes}}
+
+\textbf{Tabla III:} Variantes por modelo: cambio y efecto en Test F1 (Clasif.) / Test RMSE (Regres.).
+
+\begin{table}[h]
+\centering
+\small
+\begingroup\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccc}
+	oprule
+	extbf{Modelo} & \textbf{Variante} & \textbf{Cambio clave} & \textbf{$\Delta$Test F1} & \textbf{$\Delta$Test RMSE} \\
+\midrule
+RNN & »Profunda & 1$\rightarrow$2 capas & +0.0X & X.X \\
+LSTM & »Bi-dir & `bidirectional=True' & +0.0X & X.X \\
+GRU & »Stack & 1$\rightarrow$2 capas & +0.0X & X.X \\
+\bottomrule
+\end{tabular}
+\endgroup
+\end{table}
+
+\subsection{\textit{III-D. Curvas y métricas}}
+
+\textbf{Figura 1:} Curvas de pérdida (Clasificación) (train/val).
+
+\textbf{Figura 2:} Curvas de pérdida (Regresión, MSE) (train/val).
+
+\textbf{Figura 3:} Matriz de confusión (Test) del mejor modelo de clasificación.
+
+\textbf{Figura 4:} Gráfico de dispersión (Test) del mejor modelo de regresión (Predicho vs. Real).
+
+\section{Análisis}
+
+Discuta si las \textbf{hipótesis} se confirman. Analice:
+\begin{itemize}[noitemsep]
+    \item \textbf{RNN vs LSTM/GRU:} ¿Se observó el problema del gradiente desvaneciente en la RNN simple (p.ej., estancamiento en el entrenamiento)?
+    \item \textbf{LSTM vs GRU:} Comparar GRU vs LSTM. ¿Justifica LSTM su mayor costo computacional (más parámetros) con mejores métricas de desempeño?
+    \item \textbf{Clasif. vs Regres.:} ¿Qué tarea fue más difícil para el modelo? ¿Qué métricas o variantes del modelo ayudaron tanto a una tarea como a la otra?
+    \item \textbf{Errores (Clasif.):} Analizar la matriz de confusión. ¿Qué fallas se confunden entre sí (p.ej., fallas leves con estado sano)? ¿Hay categorías comunes (fases)?
+    \item \textbf{Errores (Regres.):} Analizar el gráfico de dispersión. ¿El modelo es preciso en todo el rango o se sesga más en valores extremos (p.ej., RUL muy bajo)?
+\end{itemize}
+
+\section{Entregables}
+
+\textbf{Informe (PDF) con filosofía IMRA} con 1--2 pág. por sección, tablas/figuras y \textbf{apéndice} con hardware y tiempos.
+
+Fijar \textbf{semillas}, documentar versiones y comandos de entrenamiento.
+
+\section{Rúbrica (100 pts)}
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Correctitud técnica (30):} 3 modelos funcionales (c/u para Clasif. y Regres.); reproducibilidad de secuencia correcto.
+    \item \textbf{Diseño experimental (25):} modelos base claros; variantes realizadas; control de hiperparámetros.
+    \item \textbf{Análisis crítico (25):} interpretación de métricas (F1 y RMSE); validación de hipótesis; comparación RNN/LSTM/GRU.
+    \item \textbf{Comunicación IMRA (15):} claridad, figuras/tablas, redacción académica.
+    \item \textbf{Orden y reproducibilidad del código (5):} modular, claro.
+\end{itemize}
+
+\end{document}
