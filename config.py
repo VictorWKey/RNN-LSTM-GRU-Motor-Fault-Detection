@@ -28,13 +28,28 @@ DATA_CONFIG = {
         'stride': 1,  # Paso para ventanas deslizantes
         'col_index': [0, 1, 2],  # Columnas a usar del CSV (3 fases del motor)
         'classes': {
+            # Clase sana
             'SC_HLT': 0,          # Sano
-            'SC_A0_B0_C1': 1,     # Falla nivel 1
-            'SC_A0_B0_C2': 2,     # Falla nivel 2
-            'SC_A0_B0_C3': 3,     # Falla nivel 3
-            'SC_A0_B0_C4': 4,     # Falla nivel 4
+            
+            # Fase C: 4 niveles de falla
+            'SC_A0_B0_C1': 1,     # Falla nivel 1 - Fase C
+            'SC_A0_B0_C2': 2,     # Falla nivel 2 - Fase C
+            'SC_A0_B0_C3': 3,     # Falla nivel 3 - Fase C
+            'SC_A0_B0_C4': 4,     # Falla nivel 4 - Fase C
+            
+            # Fase B: 4 niveles de falla
+            'SC_A0_B1_C0': 5,     # Falla nivel 1 - Fase B
+            'SC_A0_B2_C0': 6,     # Falla nivel 2 - Fase B
+            'SC_A0_B3_C0': 7,     # Falla nivel 3 - Fase B
+            'SC_A0_B4_C0': 8,     # Falla nivel 4 - Fase B
+            
+            # Fase A: 4 niveles de falla
+            'SC_A1_B0_C0': 9,     # Falla nivel 1 - Fase A
+            'SC_A2_B0_C0': 10,    # Falla nivel 2 - Fase A
+            'SC_A3_B0_C0': 11,    # Falla nivel 3 - Fase A
+            'SC_A4_B0_C0': 12,    # Falla nivel 4 - Fase A
         },
-        'num_classes': 5
+        'num_classes': 13
     },
     'regression': {
         'window_size': 64,  # Tamaño de ventana de entrada

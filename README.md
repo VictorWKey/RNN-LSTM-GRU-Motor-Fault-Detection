@@ -10,7 +10,7 @@
 
 Esta práctica implementa y compara tres arquitecturas recurrentes (RNN, LSTM y GRU) para dos tareas principales:
 
-1. **Clasificación:** Identificar el estado de salud del motor entre 5 clases (1 sano + 4 niveles de falla)
+1. **Clasificación:** Identificar el estado de salud del motor entre 13 clases (1 sano + 4 niveles de falla × 3 fases)
 2. **Regresión:** Predicción de series temporales
 
 Para cada arquitectura se implementan:
@@ -42,10 +42,9 @@ practica02/
 │
 ├── Dataset/                       # Datos de señales de motor
 │   ├── SC_HLT/                   # Clase sana
-│   ├── SC_A0_B0_C1/              # Falla nivel 1
-│   ├── SC_A0_B0_C2/              # Falla nivel 2
-│   ├── SC_A0_B0_C3/              # Falla nivel 3
-│   └── SC_A0_B0_C4/              # Falla nivel 4
+│   ├── SC_A0_B0_C1-4/            # Falla nivel 1-4 - Fase C
+│   ├── SC_A0_B1-4_C0/            # Falla nivel 1-4 - Fase B
+│   └── SC_A1-4_B0_C0/            # Falla nivel 1-4 - Fase A
 │
 ├── checkpoints/                   # Modelos guardados (generado)
 ├── figures/                       # Gráficas y visualizaciones (generado)
@@ -91,12 +90,26 @@ python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA di
 
 ### Clasificación de Señales de Motor
 
-- **5 clases totales:**
+- **13 clases totales:**
   - `SC_HLT`: Motor sano (healthy)
-  - `SC_A0_B0_C1`: Falla nivel 1
-  - `SC_A0_B0_C2`: Falla nivel 2
-  - `SC_A0_B0_C3`: Falla nivel 3
-  - `SC_A0_B0_C4`: Falla nivel 4
+  
+  **Fase C (4 niveles):**
+  - `SC_A0_B0_C1`: Falla nivel 1 - Fase C
+  - `SC_A0_B0_C2`: Falla nivel 2 - Fase C
+  - `SC_A0_B0_C3`: Falla nivel 3 - Fase C
+  - `SC_A0_B0_C4`: Falla nivel 4 - Fase C
+  
+  **Fase B (4 niveles):**
+  - `SC_A0_B1_C0`: Falla nivel 1 - Fase B
+  - `SC_A0_B2_C0`: Falla nivel 2 - Fase B
+  - `SC_A0_B3_C0`: Falla nivel 3 - Fase B
+  - `SC_A0_B4_C0`: Falla nivel 4 - Fase B
+  
+  **Fase A (4 niveles):**
+  - `SC_A1_B0_C0`: Falla nivel 1 - Fase A
+  - `SC_A2_B0_C0`: Falla nivel 2 - Fase A
+  - `SC_A3_B0_C0`: Falla nivel 3 - Fase A
+  - `SC_A4_B0_C0`: Falla nivel 4 - Fase A
 
 - **Formato:** Archivos CSV con 3 columnas (señales de 3 fases del motor)
 - **5 archivos por clase** con ~1000 muestras cada uno

@@ -2,7 +2,7 @@
 Script principal para entrenamiento de modelos de CLASIFICACIÓN de señales de motor.
 
 Este script entrena RNN, LSTM y GRU (modelos base + variantes) para clasificar
-señales de motor en 5 clases (1 sano + 4 niveles de falla).
+señales de motor en 13 clases (1 sano + 4 niveles de falla × 3 fases).
 
 Uso:
     python train_classification.py
